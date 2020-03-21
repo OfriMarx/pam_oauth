@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <syslog.h>
 
-//#define LOL_DEBUG
+//#define ACTIVE_DEBUG
 
-#ifdef LOL_DEBUG
+#ifdef ACTIVE_DEBUG
 #define LOG_FUNC(msg, ...) syslog(LOG_INFO, msg, ##__VA_ARGS__) 
 #else
 #define LOG_FUNC(msg, ...) NULL
