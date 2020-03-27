@@ -1,5 +1,6 @@
 const http = require("http");
 const url = require("url");
+const fs = require("fs");
 const oauth = require("./oauth");
 
 
@@ -23,8 +24,40 @@ http.createServer(function(req, res) {
 	}
 
 	if(path === "/token") {
-		res.writeHead(200, {'Content-Type': 'text/plain'});
-		res.end(oauth.generate_token());
+		if(req.method === "GET") {
+			fs.readFile("token.html", function(err, data) {
+				if(err) {
+					res.writeHead(500, {'Content-Type': 'text/plain'});
+					res.end(err.name + ": " + err.message);
+				}
+				else {
+					res.writeHead(200, {'Content-Type': 'text/html'});
+					res.end(data);
+				}
+			});
+		} else if(req.method === "POST") {
+			let body = "";
+			req.on("data", chunk => {
+				body += chunk.toString();
+			});
+			req.on("end", () => {
+				body = body.split("=");
+				if(body.length === 2 && body[0] === "grant_type" && body[1] === "client_credentials") {
+					res.writeHead(200, {'Content-Type': 'application/json',
+						'Cache-Control': 'no-store',
+						'Pragma': 'no-cache'	
+					});
+					res.end(oauth.generate_token());
+				} else {
+					res.writeHead(400, {'Content-Type': 'application/json'});
+					res.end('{"error": "invalid_request"}');
+				}
+			});
+		} else {
+			res.writeHead(405, {'Content-Type': 'text/plain', 
+					'Allow': 'GET, POST'});
+			res.end("Method Not Allowed");
+		}
 	} else {
 		res.writeHead(404, {'Content-Type': 'text/plain'});
 		res.end("not found :(");

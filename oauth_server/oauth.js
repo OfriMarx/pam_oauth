@@ -12,7 +12,12 @@ for(let i=0; i < lines.length; i++) {
 }
 
 exports.generate_token = function() {
-	return "token123";
+	let token = {
+		"access_token": "token123",
+		"token_type": "bearer",
+		"expires_in": 3600
+	};
+	return JSON.stringify(token);
 }
 
 exports.authenticate = function(client_id, client_secret) {
