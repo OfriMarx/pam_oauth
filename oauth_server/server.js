@@ -7,6 +7,7 @@ const oauth = require("./oauth");
 http.createServer(function(req, res) {
 	var path = url.parse(req.url).pathname; 
 	var headers = req.headers;
+	var creds;
 
 	if(! ('authorization' in headers)) {
 		res.writeHead(401, {'Content-Type': 'text/plain',
@@ -15,7 +16,7 @@ http.createServer(function(req, res) {
 		return;
 	}
 	else {
-		let creds = Buffer.from(headers['authorization'].split(" ")[1], "base64").toString().split(":");
+		creds = Buffer.from(headers['authorization'].split(" ")[1], "base64").toString().split(":");
 		if(!oauth.authenticate(creds[0], creds[1])) {
 			res.writeHead(403, {'Content-Type': 'text/plain'});
 			res.end("forbidden");
@@ -47,7 +48,7 @@ http.createServer(function(req, res) {
 						'Cache-Control': 'no-store',
 						'Pragma': 'no-cache'	
 					});
-					res.end(oauth.generate_token());
+					res.end(oauth.generate_token(creds[0]));
 				} else {
 					res.writeHead(400, {'Content-Type': 'application/json'});
 					res.end('{"error": "invalid_request"}');
