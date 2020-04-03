@@ -23,11 +23,17 @@ function replaceAll(str1, str2, str3) {
 }
 
 function base64urlencode(buf) {
-	let ret = buf.toString("base64");
+	var ret = buf.toString("base64");
 	ret = replaceAll(ret, "=", "");
 	ret = replaceAll(ret, "+", "-");
 	ret = replaceAll(ret, "/", "_");
 	return ret;
+}
+
+function base64urldecode(str) {
+	str = replaceAll(str, "-", "+");
+	str = replaceAll(str, "_", "/");
+	return Buffer.from(str, "base64");
 }
 
 function hmac_sha256(data, key) {
@@ -59,21 +65,29 @@ function get_key(kid) {
 	return keyobj.export({"type":"pkcs1", "format":"der"});
 }
 
-exports.generate_token = function(client_id) {
-	let exp_seconds = 600
-	let jwt_header = {
+function get_random_kid() {
+	var key_list = Object.keys(keys);
+	return key_list[key_list.length * Math.random() << 0];
+}
+
+exports.generate_token = function(client_id, exp_seconds) {
+	var kid = get_random_kid();
+	var time = Math.round(new Date() / 1000);
+	var jwt_header = {
 		"alg": "HS256",
-		"kid": 1
+		"kid": kid
 	};
-	let jwt_claims = {
+	var jwt_claims = {
+		"iss": "ofri",
 		"sub": client_id,
-		"exp": Math.round(new Date() / 1000 + exp_seconds)
+		"exp": time + exp_seconds,
+		"nbf": time
 	};
 
-	let token_body = base64urlencode(Buffer.from(JSON.stringify(jwt_header))) + "." + base64urlencode(Buffer.from(JSON.stringify(jwt_claims)));
-	let signature = base64urlencode(hmac_sha256(Buffer.from(token_body), get_key(jwt_header["kid"])));
+	var token_body = base64urlencode(Buffer.from(JSON.stringify(jwt_header))) + "." + base64urlencode(Buffer.from(JSON.stringify(jwt_claims)));
+	var signature = base64urlencode(hmac_sha256(Buffer.from(token_body), get_key(kid)));
 
-	let token_response = {
+	var token_response = {
 		"access_token": token_body + "." + signature,
 		"token_type": "bearer",
 		"expires_in": exp_seconds
@@ -82,6 +96,51 @@ exports.generate_token = function(client_id) {
 	return JSON.stringify(token_response);
 }
 
-exports.authenticate = function(client_id, client_secret) {
+exports.authenticate_client = function(client_id, client_secret) {
 	return creds[client_id] === client_secret;
+}
+
+exports.validate_token = function(token) {
+	token = token.split(".");
+	if(token.length != 3) {
+		return false;
+	}
+	
+	var header = base64urldecode(token[0]);
+	var claims = base64urldecode(token[1]);
+	var signature = base64urldecode(token[2]);
+
+	try {
+		header = JSON.parse(header.toString());
+		claims = JSON.parse(header.toString());
+	} catch(e) {
+		return false;
+	}
+
+	if(!("alg" in header && "kid" in header && "iss" in claims && "sub" in claims && "exp" in claims && "nbf" in claims)) {
+		return false;
+	}
+
+	if(header["alg"] !== "HS256") {
+		return false;
+	}
+
+	if(claims["iss"] !== "ofri") {
+		return false;
+	}
+
+	if(!(claims["sub"] in creds)) {
+		return false;
+	}
+
+	var time = Math.round(new Date() / 1000);
+	if(time < claims["nbf"] || time > claims["exp"]) {
+		return false;
+	}
+
+	if(Buffer.compare(hmac_sha256(Buffer.from(token[0] + "." + token[1]), get_key(header["kid"])), signature)) {
+		return false;
+	}
+
+	return true;
 }
