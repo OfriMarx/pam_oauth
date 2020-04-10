@@ -112,7 +112,7 @@ exports.validate_token = function(token) {
 
 	try {
 		header = JSON.parse(header.toString());
-		claims = JSON.parse(header.toString());
+		claims = JSON.parse(claims.toString());
 	} catch(e) {
 		return false;
 	}
