@@ -1,12 +1,13 @@
 #define PAM_SM_AUTH
 
 #include <security/pam_modules.h> 
+#include <security/pam_ext.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
 
-//#define ACTIVE_DEBUG
+#define ACTIVE_DEBUG
 
 #ifdef ACTIVE_DEBUG
 #define LOG_FUNC(msg, ...) syslog(LOG_INFO, msg, ##__VA_ARGS__) 
@@ -21,7 +22,7 @@ typedef struct pam_message pam_message;
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t* pamh, int flag, int argc, const char** argv)
 {
 	const char* username = NULL;
-   	char* password = NULL;
+   	const char* password = NULL;
 	FILE* configFile = NULL;
 	char* line = NULL, *name = NULL, *pass = NULL;
 	char* retval = NULL; 
@@ -40,61 +41,18 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t* pamh, int flag, int argc, const
 		return PAM_AUTH_ERR;
 	}
 
-	if(pam_get_item(pamh, PAM_CONV, (const void**)&passConv) != PAM_SUCCESS)
+	if(pam_get_authtok(pamh, PAM_AUTHTOK, &password, "promptt: ") != PAM_SUCCESS)
 	{
-		LOG_FUNC("couldn't get password conv");
+		LOG_FUNC("couldn't get password");
 		closelog();
 		return PAM_AUTH_ERR;
 	}
-
-	msg = (pam_message*)malloc(sizeof(pam_message));
-	if(msg == NULL)
-	{
-		LOG_FUNC("bad allocation :(");
-		closelog();
-		return PAM_AUTH_ERR;
-	}
-
-	msg->msg_style = PAM_PROMPT_ECHO_OFF;
-	msg->msg = NULL;
-	if(passConv->conv(1, (const pam_message**)&msg, &resp, NULL) != PAM_SUCCESS)
-	{
-		free(msg);
-		LOG_FUNC("couldn't password");
-		closelog();
-		return PAM_AUTH_ERR;
-	}
-	
-	if(resp->resp_retcode != PAM_SUCCESS)
-	{
-		free(msg);
-		free(resp->resp);
-		free(resp);
-		LOG_FUNC("convo func failed");
-		closelog();
-		return PAM_AUTH_ERR;
-	}
-
-	if((password = strdup(resp->resp)) == NULL)
-	{
-		free(msg);
-		free(resp->resp);
-		free(resp);
-		LOG_FUNC("bad alloc :(");
-		closelog();
-		return PAM_AUTH_ERR;
-	}
-
-	free(msg);
-	free(resp->resp);
-	free(resp);
 
 	LOG_FUNC("username: %s", username);
 	LOG_FUNC("password: %s", password);
 
 	if((configFile = fopen("/etc/pasten.conf", "r")) == NULL)
 	{
-		free(password);
 		LOG_FUNC("couldn't open config file");
 		closelog();
 		return PAM_AUTH_ERR;
@@ -104,7 +62,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t* pamh, int flag, int argc, const
 
 	if(line == NULL)
 	{
-		free(password);
 		fclose(configFile);
 		LOG_FUNC("bad allocation :(");
 		closelog();
@@ -136,7 +93,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t* pamh, int flag, int argc, const
 		retval = fgets(line, 200, configFile);
 	}
 
-	free(password);
 	free(line);
 	fclose(configFile);
 
